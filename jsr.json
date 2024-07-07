@@ -1,5 +1,5 @@
 {
     "name": "@sheriff/fp-web-api",
     "version": "0.1.0",
-    "exports": "./index.ts"
+    "exports": ["./index.ts","./localStorage/Storage.ts"]
 }
