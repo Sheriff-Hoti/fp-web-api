@@ -5,6 +5,11 @@ const JsonParseError = (e: unknown) => ({
   error: either.toError(e),
 });
 
+const JsonStringifyError = (e: unknown) => ({
+  type: "JSON_STRINGIFY_ERROR" as const,
+  error: either.toError(e),
+});
+
 export function jsonParse(
   input: string
 ): either.Either<ReturnType<typeof JsonParseError>, unknown> {
@@ -14,4 +19,11 @@ export function jsonParse(
   );
 }
 
-export function jsonStringify(input: unknown) {}
+export function jsonStringify(
+  input: unknown
+): either.Either<ReturnType<typeof JsonStringifyError>, string> {
+  return either.tryCatch(
+    () => JSON.stringify(input),
+    (e) => JsonStringifyError(e)
+  );
+}
