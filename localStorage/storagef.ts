@@ -3,7 +3,7 @@ import { pipe } from "npm:fp-ts@2.16.7/lib/function.js";
 import { either, option } from "npm:fp-ts@2.16.7";
 import { isWindowBrowserOptional } from "../utils/isBrowserOptional.ts";
 import { schemaParseEither } from "../utils/schemaParseEither.ts";
-import { jsonParse } from "../utils/jsonEither.ts";
+import { jsonParse, jsonStringify } from "../utils/jsonEither.ts";
 
 const NotBrowserEnvironment = {
   type: "WINDOW_OBJ_NOT_PRESENT" as const,
@@ -22,6 +22,11 @@ function getItemOptional(storage: Storage, key: string) {
     (val) => (val ? option.some(val) : option.none)
   );
 }
+
+const StorageSetItemError = (e: unknown) => ({
+  type: "STORAGE_SET_ITEM_ERROR" as const,
+  error: either.toError(e),
+});
 
 export function getItem<T extends z.ZodTypeAny>(
   key: string,
@@ -44,19 +49,37 @@ export function getItem<T extends z.ZodTypeAny>(
 
 export function setItem<T extends z.ZodTypeAny>(
   key: string,
+  value: z.infer<typeof schema>,
   schema: T,
   storage: "local" | "session" = "local"
 ) {
   const smth = pipe(
-    isWindowBrowserOptional(),
-    either.fromOption(() => NotBrowserEnvironment),
-    either.map((val) =>
-      storage === "local" ? val.localStorage : val.sessionStorage
+    either.Do,
+    either.bindW("storage", () =>
+      pipe(
+        isWindowBrowserOptional(),
+        either.fromOption(() => NotBrowserEnvironment),
+        either.map((val) =>
+          storage === "local" ? val.localStorage : val.sessionStorage
+        )
+      )
     ),
-    either.map((val) => getItemOptional(val, key)),
-    either.flatMap(either.fromOption(() => StorageItemNotFound)),
-    either.flatMap(jsonParse),
-    either.flatMap((val) => schemaParseEither(val, schema))
+    either.bindW("stringVal", () => jsonStringify(value)),
+    either.bindW("setItem", ({ storage, stringVal }) =>
+      pipe(
+        either.tryCatch(
+          () => storage.setItem(key, stringVal),
+          (e) => StorageSetItemError(e)
+        ),
+        either.map(() => {
+          return {
+            key,
+            value,
+          };
+        })
+      )
+    ),
+    either.map((val) => val.setItem)
   );
   return smth;
 }
